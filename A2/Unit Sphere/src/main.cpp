@@ -6,24 +6,8 @@
 static const char*	window_name = "cgsphere - unit sphere";
 static const char*	vert_shader_path = "../bin/shaders/transform.vert";
 static const char*	frag_shader_path = "../bin/shaders/transform.frag";
-static const bool	b_index_buffer = true;
+static const bool	b_index_buffer = true; // always use index buffer
 static const uint MAX_TC_MODE = 2;
-
-//*************************************
-// common structures
-struct camera
-{
-	vec3	eye = vec3( 0, 30, 300 );
-	vec3	at = vec3( 0, 0, 0 );
-	vec3	up = vec3( 0, 1, 0 );
-	mat4	view_matrix = mat4::look_at( eye, at, up );
-		
-	float	fovy = PI/4.0f; // must be in radian
-	float	aspect_ratio;
-	float	dNear = 1.0f;
-	float	dFar = 1000.0f;
-	mat4	projection_matrix;
-};
 
 //*************************************
 // window objects
@@ -38,18 +22,13 @@ GLuint	vertex_array = 0;	// ID holder for vertex array object
 //*************************************
 // global variables
 int		frame = 0;		// index of rendering frames
-uint	tc_mode = 0;
-bool	b_rotation = false;
-float	rotation_time_elapsed = 0.0f;
-float	time_checkpoint = 0.0f;
+uint	tc_mode = 0;	// To toggle colors
+bool	b_rotation = false;	// where rotating
+float	rotation_time_elapsed = 0.0f;	// only count the time of rotating
+float	time_checkpoint = 0.0f;	// starting point of elapsed time
 #ifndef GL_ES_VERSION_2_0
 bool	b_wireframe = false;
 #endif
-
-//*************************************
-// scene objects
-mesh*	pMesh = nullptr;
-camera	cam;
 
 // holder of vertices and indices of a unit sphere
 std::vector<vertex>	unit_sphere_vertices;
@@ -58,10 +37,6 @@ std::vector<uint> indices;
 //*************************************
 void update()
 {
-	// update projection matrix
-	cam.aspect_ratio = window_size.x / float(window_size.y);
-	cam.projection_matrix = mat4::perspective(cam.fovy, cam.aspect_ratio, cam.dNear, cam.dFar);
-
 	float aspect = window_size.x / float(window_size.y);
 	mat4 aspect_matrix =
 	{
@@ -98,20 +73,13 @@ void render()
 
 	// render vertices: trigger shader programs to process vertex data
 	// configure transformation parameters
-	
 	if (b_rotation) rotation_time_elapsed += float(glfwGetTime()) - time_checkpoint;
 	time_checkpoint = float(glfwGetTime());
 	float theta = rotation_time_elapsed * 0.5f;
 
-	
-
 	// build the model matrix
-	//mat4 model_matrix = mat4::translate(move, 0.0f, -abs(move)) *
-	//	mat4::translate(cam.at) *
-	//	mat4::rotate(vec3(0, 1, 0), theta) *
-	//	mat4::translate(-cam.at);
-
 	mat4 model_matrix;
+
 	mat4 scale_matrix =
 	{
 		1, 0, 0, 0,
@@ -122,8 +90,6 @@ void render()
 
 	mat4 rotation_matrix =
 	{
-		//c,-s, 0, 0,
-		//s, c, 0, 0,
 		cos(theta), -sin(theta), 0, 0,
 		sin(theta), cos(theta), 0, 0,
 		0, 0, 1, 0,
@@ -163,15 +129,6 @@ void update_vertex_buffer(const std::vector<vertex>& vertices, uint N)
 	// create buffers
 	if (b_index_buffer)
 	{
-		/*
-		std::vector<uint> indices;
-		for (uint k = 0; k < N; k++)
-		{
-			indices.push_back(0);	// the origin
-			indices.push_back(k + 1);
-			indices.push_back(k + 2);
-		}
-		*/
 		// generation of vertex buffer: use vertices as it is
 		glGenBuffers(1, &vertex_buffer);
 		glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer);
@@ -181,21 +138,6 @@ void update_vertex_buffer(const std::vector<vertex>& vertices, uint N)
 		glGenBuffers(1, &index_buffer);
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, index_buffer);
 		glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(uint) * indices.size(), &indices[0], GL_STATIC_DRAW);
-	}
-	else
-	{
-		std::vector<vertex> v; // triangle vertices
-		for (uint k = 0; k < N; k++)
-		{
-			v.push_back(vertices.front());	// the origin
-			v.push_back(vertices[k + 1]);
-			v.push_back(vertices[k + 2]);
-		}
-
-		// generation of vertex buffer: use triangle_vertices instead of vertices
-		glGenBuffers(1, &vertex_buffer);
-		glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(vertex) * v.size(), &v[0], GL_STATIC_DRAW);
 	}
 
 	// generate vertex array object, which is mandatory for OpenGL 3.3 and higher
@@ -273,10 +215,6 @@ bool user_init()
 	glEnable( GL_CULL_FACE );								// turn on backface culling
 	glEnable( GL_DEPTH_TEST );								// turn on depth tests
 
-	// load the mesh
-	//pMesh = cg_load_mesh( mesh_vertex_path, mesh_index_path );
-	//if(pMesh==nullptr){ printf( "Unable to load mesh\n" ); return false; }
-
 	// create vertex buffer; called again when index buffering mode is toggled
 	update_vertex_buffer(unit_sphere_vertices,0);
 
@@ -293,6 +231,7 @@ int main( int argc, char* argv[] )
 	float theta = PI;
 	vertex vertex;
 
+	// creating vertices
 	for (int i = 0; i <= 72; i++) {
 		for (int j = 0; j <= 36; j++) {
 			//printf("phi: %f , theta: %f\n", phi, theta);
@@ -306,6 +245,7 @@ int main( int argc, char* argv[] )
 		phi += 2 * PI / 72;
 	}
 
+	// creating indices
 	for (int i = 0; i < 72; i++) {
 		for (int j = 0; j < 36; j++) {
 			indices.emplace_back(37 * i + j);
